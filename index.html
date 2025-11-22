@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dasturlar — API GET example</title>
+  <style>
+    body{font-family:Inter,system-ui,Arial,sans-serif;margin:24px;background:#f6f7fb;color:#111}
+    .card{background:#fff;border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(20,20,60,0.06);max-width:980px;margin:0 auto}
+    h1{font-size:20px;margin:0 0 12px}
+    pre{white-space:pre-wrap;word-break:break-word;background:#f4f6fb;padding:12px;border-radius:8px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left}
+    th{background:#fafbff;font-weight:600}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{padding:8px 12px;border-radius:8px;border:0;background:#2563eb;color:white;cursor:pointer}
+    button.secondary{background:#6b7280}
+    .muted{color:#6b7280;font-size:13px}
+    .error{color:#b91c1c;margin-top:12px}
+    .loader{display:inline-block;width:18px;height:18px;border:3px solid rgba(0,0,0,0.08);border-top-color:rgba(0,0,0,0.35);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media (max-width:640px){.controls{flex-direction:column;align-items:flex-start}th,td{font-size:13px}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>GET /dasturlar — API dan ma'lumot olish</h1>
+    <div class="controls">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="btnFetch">Ma'lumotlarni yuklash</button>
+        <button id="btnClear" class="secondary">Tozalash</button>
+      </div>
+      <div style="margin-left:auto" class="muted">API: <code>http://138.68.93.19:3000/dasturlar?lang=en&language=en&locale=en</code></div>
+    </div>
+
+    <div id="status" style="margin-top:12px"></div>
+
+    <div id="result"></div>
+
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer">Qanday ishlaydi (qisqacha)</summary>
+      <p class="muted">Bu sahifa <code>fetch()</code> yordamida URL ga GET so'rov yuboradi, JSONni oladi va sahifada jadval ko'rinishida ko'rsatadi. Agar brauzer CORS xatosi bersa, server tomonida CORS ruxsatlari yo'q. Ushbu faylni <strong>lokal fayl (file://)</strong> orqali ochsangiz ba'zan ishlamasligi mumkin — maslahat: <code>python -m http.server 5500</code> yoki har qanday static server orqali ishga tushiring.</p>
+    </details>
+
+    <h3 style="margin-top:14px">JSON javobi (raw)</h3>
+    <pre id="raw">-- hech narsa yuklanmagan --</pre>
+  </div>
+
+  <script>
+    const API = 'http://138.68.93.19:3000/dasturlar?lang=en&language=en&locale=en';
+    const btn = document.getElementById('btnFetch');
+    const btnClear = document.getElementById('btnClear');
+    const statusEl = document.getElementById('status');
+    const rawEl = document.getElementById('raw');
+    const resultEl = document.getElementById('result');
+
+    function setStatus(text, isError=false){
+      statusEl.innerHTML = isError ? `<div class="error">${text}</div>` : `<div style="display:flex;gap:8px;align-items:center"><div class="loader"></div><div>${text}</div></div>`;
+      if(!text) statusEl.innerHTML = '';
+    }
+
+    async function fetchData(){
+      setStatus('Yuklanmoqda...');
+      rawEl.textContent = '-- hech narsa yuklanmagan --';
+      resultEl.innerHTML = '';
+
+      try{
+        const res = await fetch(API, { method: 'GET' });
+        if(!res.ok) throw new Error(`Server javobi: ${res.status} ${res.statusText}`);
+        const data = await res.json();
+
+        rawEl.textContent = JSON.stringify(data, null, 2);
+
+        // Agar natija massiv bo'lsa jadvalga chiqaramiz, aks holda obyekt sifatida ko'rsatamiz
+        if(Array.isArray(data)){
+          if(data.length === 0){
+            resultEl.innerHTML = '<div class="muted">Hech qanday yozuv topilmadi.</div>';
+          } else {
+            const cols = new Set();
+            data.forEach(item => Object.keys(item).forEach(k => cols.add(k)));
+            const colArr = Array.from(cols);
+
+            let html = '<table><thead><tr>' + colArr.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+            html += data.map(row => '<tr>' + colArr.map(c => `<td>${escapeHtml(String(row[c] ?? ''))}</td>`).join('') + '</tr>').join('');
+            html += '</tbody></table>';
+            resultEl.innerHTML = html;
+          }
+        } else {
+          resultEl.innerHTML = '<pre>' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        }
+
+        setStatus('');
+      } catch(err){
+        console.error(err);
+        // CORS tip: if message mentions CORS, include friendly hint
+        const msg = err.message || String(err);
+        let hint = '';
+        if(msg.toLowerCase().includes('cors')){
+          hint = '\n\nEslatma: agar CORS (Cross-Origin) xatosi bo' + "lsa, server tomoni `Access-Control-Allow-Origin` ni sozlashi kerak.\n" + "Agar sizda serverni o'zgartirish imkoniyati bo'lmasa, proxy yoki local server orqali ishlating.";
+        }
+        setStatus('Xato yuz berdi: ' + msg, true);
+        rawEl.textContent = msg + hint;
+      }
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    btn.addEventListener('click', fetchData);
+    btnClear.addEventListener('click', ()=>{
+      rawEl.textContent = '-- hech narsa yuklanmagan --';
+      resultEl.innerHTML = '';
+      setStatus('');
+    });
+
+    // Optionally auto-load on page open (uncomment to enable)
+    // fetchData();
+  </script>
+</body>
+</html>
